@@ -1,15 +1,15 @@
 package geography
 
 type Grid struct {
-	MaxX int64
-	MaxY int64
-	MinY int64
-	MinX int64
+	MaxX int32
+	MaxY int32
+	MinY int32
+	MinX int32
 }
 
 var current Grid
 
-func InitGrid(x, y int64) {
+func InitGrid(x, y int32) {
 	current = Grid{MaxX: x, MaxY: y, MinX: -x, MinY: -y}
 }
 

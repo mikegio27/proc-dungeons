@@ -6,8 +6,8 @@ import (
 )
 
 type Cell struct {
-	X int64
-	Y int64
+	X int32
+	Y int32
 }
 
 // edgeStartingCell returns a random starting cell on the outer edge of the
@@ -23,8 +23,8 @@ func edgeStartingCell(roomCells map[Cell]bool) Cell {
 
 	for {
 		// Pick a random position along the perimeter.
-		pos := rand.Int63n(perimeter)
-		var x, y int64
+		pos := rand.Int31n(perimeter)
+		var x, y int32
 
 		switch {
 		case pos < width:
@@ -73,7 +73,7 @@ func randomVisitedCell(visited map[Cell]bool, roomCells map[Cell]bool) (Cell, bo
 // starting cell.
 func findPath(start, target Cell, roomCells, roomEdges map[Cell]bool) ([]Cell, bool) {
 	plane := GetPlane()
-	dirs := [][2]int64{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
+	dirs := [][2]int32{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
 
 	queue := []Cell{start}
 	prev := make(map[Cell]Cell)

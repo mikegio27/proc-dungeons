@@ -57,13 +57,13 @@ const maxTotalRoomAreaFraction = 0.45
 // minRoomGap is the minimum number of tiles that should separate the
 // bounding boxes of any two rooms. This helps prevent rooms from being
 // squished directly against each other.
-const minRoomGap int64 = 2
+const minRoomGap = 2
 
 // roomDimensions returns random width and height for the bounding box of a
 // given room shape. Dimensions are constrained so that the room stays
 // within a reasonable size relative to the overall plane and preserves the
 // basic proportions of each shape.
-func roomDimensions(shape RoomId, plane Grid) (width, height int64) {
+func roomDimensions(shape RoomId, plane Grid) (width, height int32) {
 	gridWidth := plane.MaxX - plane.MinX + 1
 	gridHeight := plane.MaxY - plane.MinY + 1
 	if gridWidth < 3 {
@@ -73,12 +73,12 @@ func roomDimensions(shape RoomId, plane Grid) (width, height int64) {
 		gridHeight = 3
 	}
 	gridArea := gridWidth * gridHeight
-	maxArea := int64(maxRoomAreaFraction * float64(gridArea))
+	maxArea := int32(maxRoomAreaFraction * float64(gridArea))
 	if maxArea < 9 { // ensure at least a small 3x3 room is possible
 		maxArea = 9
 	}
 
-	minSize := int64(3)
+	minSize := int32(3)
 
 	switch shape {
 	case Rectangle, Triangle:
@@ -89,25 +89,25 @@ func roomDimensions(shape RoomId, plane Grid) (width, height int64) {
 
 		// Try random dimensions that satisfy the area constraint.
 		for range 10 {
-			w := rand.Int63n(maxW-minSize+1) + minSize
-			h := rand.Int63n(maxH-minSize+1) + minSize
+			w := rand.Int31n(maxW-minSize+1) + minSize
+			h := rand.Int31n(maxH-minSize+1) + minSize
 			if w*h <= maxArea {
 				return w, h
 			}
 		}
 
 		// Fallback: derive dimensions directly from the max area.
-		w := min(max(int64(math.Sqrt(float64(maxArea))), minSize), maxW)
+		w := min(max(int32(math.Sqrt(float64(maxArea))), minSize), maxW)
 		h := min(max(maxArea/w, minSize), maxH)
 		return w, h
 
 	case Circle, Square:
 		// Circles and squares use a square bounding box.
 		maxSideByPlane := min(gridHeight, gridWidth)
-		maxSideByArea := int64(math.Sqrt(float64(maxArea)))
+		maxSideByArea := int32(math.Sqrt(float64(maxArea)))
 		maxSide := max(min(maxSideByArea, maxSideByPlane), minSize)
 
-		side := rand.Int63n(maxSide-minSize+1) + minSize
+		side := rand.Int31n(maxSide-minSize+1) + minSize
 		return side, side
 
 	default:
@@ -141,8 +141,8 @@ func roomEdges(shape RoomId) (topLeft, bottomRight Cell) {
 	yRange := maxTopY - plane.MinY + 1
 
 	// Randomly choose a top-left within the valid ranges.
-	x := rand.Int63n(xRange) + plane.MinX
-	y := rand.Int63n(yRange) + plane.MinY
+	x := rand.Int31n(xRange) + plane.MinX
+	y := rand.Int31n(yRange) + plane.MinY
 
 	topLeft = Cell{X: x, Y: y}
 	bottomRight = Cell{X: x + width - 1, Y: y + height - 1}
@@ -161,7 +161,7 @@ func RandomRoom() Room {
 }
 
 // roomArea returns the area of the room's bounding box.
-func roomArea(r Room) int64 {
+func roomArea(r Room) int32 {
 	width := r.BottomRight.X - r.TopLeft.X + 1
 	height := r.BottomRight.Y - r.TopLeft.Y + 1
 	if width <= 0 || height <= 0 {
@@ -172,7 +172,7 @@ func roomArea(r Room) int64 {
 
 // roomsTooClose reports whether two rooms are closer than the specified
 // gap, based on their bounding boxes.
-func roomsTooClose(a, b Room, gap int64) bool {
+func roomsTooClose(a, b Room, gap int32) bool {
 	ax1, ax2 := a.TopLeft.X, a.BottomRight.X
 	ay1, ay2 := a.TopLeft.Y, a.BottomRight.Y
 	bx1, bx2 := b.TopLeft.X, b.BottomRight.X
@@ -187,19 +187,18 @@ func roomsTooClose(a, b Room, gap int64) bool {
 
 // Rooms generates up to maxRooms rooms, enforcing both a minimum spacing
 // between rooms and a cap on the total area that all rooms may occupy.
-func Rooms() []Room {
-	maxRooms := 10
+func Rooms(maxRooms int) []Room {
 	plane := GetPlane()
 	gridWidth := plane.MaxX - plane.MinX + 1
 	gridHeight := plane.MaxY - plane.MinY + 1
 	gridArea := gridWidth * gridHeight
-	maxTotalArea := int64(maxTotalRoomAreaFraction * float64(gridArea))
+	maxTotalArea := int32(maxTotalRoomAreaFraction * float64(gridArea))
 	if maxTotalArea <= 0 {
 		maxTotalArea = gridArea
 	}
 
 	rooms := make([]Room, 0, maxRooms)
-	var usedArea int64
+	var usedArea int32
 
 	for len(rooms) < maxRooms {
 		success := false
@@ -298,8 +297,8 @@ func fillTriangleRoom(visited map[Cell]bool, room Room) {
 		// t goes from 0 at apex to 1 at base
 		t := float64(y-apexY) / height
 		halfWidth := maxHalfWidth * t
-		minX := int64(math.Floor(cx - halfWidth))
-		maxX := int64(math.Ceil(cx + halfWidth))
+		minX := int32(math.Floor(cx - halfWidth))
+		maxX := int32(math.Ceil(cx + halfWidth))
 		for x := minX; x <= maxX; x++ {
 			visited[Cell{X: x, Y: y}] = true
 		}

@@ -7,9 +7,12 @@ import (
 )
 
 func main() {
-	fmt.Println("Thinking how to generate procedural dungeons in go...")
-	geography.InitGrid(50, 25)
-	rooms := geography.Rooms()
+	fmt.Println("Generating procedural dungeon")
+	gridX := int32(50)
+	gridY := int32(25)
+	maxRooms := 10
+	geography.InitGrid(gridX, gridY)
+	rooms := geography.Rooms(maxRooms)
 	visited, starts := geography.GenPaths(rooms)
 	geography.AddRoomEdges(visited, rooms)
 	geography.DrawGrid(visited, starts)
