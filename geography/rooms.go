@@ -1,9 +1,6 @@
 package geography
 
-import (
-	"math"
-	"math/rand"
-)
+import "math"
 
 type RoomId int
 
@@ -89,8 +86,8 @@ func roomDimensions(shape RoomId, plane Grid) (width, height int32) {
 
 		// Try random dimensions that satisfy the area constraint.
 		for range 10 {
-			w := rand.Int31n(maxW-minSize+1) + minSize
-			h := rand.Int31n(maxH-minSize+1) + minSize
+			w := rng.Int31n(maxW-minSize+1) + minSize
+			h := rng.Int31n(maxH-minSize+1) + minSize
 			if w*h <= maxArea {
 				return w, h
 			}
@@ -107,7 +104,7 @@ func roomDimensions(shape RoomId, plane Grid) (width, height int32) {
 		maxSideByArea := int32(math.Sqrt(float64(maxArea)))
 		maxSide := max(min(maxSideByArea, maxSideByPlane), minSize)
 
-		side := rand.Int31n(maxSide-minSize+1) + minSize
+		side := rng.Int31n(maxSide-minSize+1) + minSize
 		return side, side
 
 	default:
@@ -141,8 +138,8 @@ func roomEdges(shape RoomId) (topLeft, bottomRight Cell) {
 	yRange := maxTopY - plane.MinY + 1
 
 	// Randomly choose a top-left within the valid ranges.
-	x := rand.Int31n(xRange) + plane.MinX
-	y := rand.Int31n(yRange) + plane.MinY
+	x := rng.Int31n(xRange) + plane.MinX
+	y := rng.Int31n(yRange) + plane.MinY
 
 	topLeft = Cell{X: x, Y: y}
 	bottomRight = Cell{X: x + width - 1, Y: y + height - 1}
@@ -150,7 +147,7 @@ func roomEdges(shape RoomId) (topLeft, bottomRight Cell) {
 }
 
 func RandomRoom() Room {
-	chosen := allRoomIds[rand.Intn(len(allRoomIds))]
+	chosen := allRoomIds[rng.Intn(len(allRoomIds))]
 	// top left and bottom right positions must be within the constraints of the roomEdges
 	topLeft, bottomRight := roomEdges(chosen)
 	return Room{

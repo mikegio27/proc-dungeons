@@ -1,9 +1,6 @@
 package geography
 
-import (
-	"fmt"
-	"math/rand"
-)
+import "fmt"
 
 type Cell struct {
 	X int32
@@ -23,7 +20,7 @@ func edgeStartingCell(roomCells map[Cell]bool) Cell {
 
 	for {
 		// Pick a random position along the perimeter.
-		pos := rand.Int31n(perimeter)
+		pos := rng.Int31n(perimeter)
 		var x, y int32
 
 		switch {
@@ -64,7 +61,7 @@ func randomVisitedCell(visited map[Cell]bool, roomCells map[Cell]bool) (Cell, bo
 	if len(candidates) == 0 {
 		return Cell{}, false
 	}
-	return candidates[rand.Intn(len(candidates))], true
+	return candidates[rng.Intn(len(candidates))], true
 }
 
 // findPath uses a BFS search to find a shortest path from start to target,
@@ -190,7 +187,7 @@ func GenPaths(rooms []Room) (map[Cell]bool, map[Cell]bool) {
 		// Choose a random edge cell as a door, if any exist.
 		var door Cell
 		if len(edgeCells) > 0 {
-			door = edgeCells[rand.Intn(len(edgeCells))]
+			door = edgeCells[rng.Intn(len(edgeCells))]
 			roomDoors[i] = door
 			roomHasDoor[i] = true
 		}
