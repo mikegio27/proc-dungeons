@@ -1,19 +1,35 @@
 # Procedurally Generated Dungeon Maps
-I think this project is an interesting exercise in understanding constraints of a system. Trying to create a sufficiently random dungeon map for games like Dungeons & Dragons while ensuring quality through constraint is an interesting challenge.
+Procedurally generates ASCII dungeon layouts using constraint-based procedural generation.
+Rooms are placed with size, spacing, and total-coverage limits, then connected via corridors that obey strict routing rules.
+---
+### Legend
+| Symbol | Meaning                                         |
+| ------ | ----------------------------------------------- |
+| `#`    | Walkable floor (rooms **and** corridors)        |
+| `.`    | Empty / solid space                             |
+| `*`    | Corridor starting cell (usually from grid edge) |
+| `+`    | Origin marker `(0,0)`                           |
 
-## How to Use
-Clone the project and `go run main.go`. You can edit some variables in `main.go` to change some constraints.
+### Seeds
+Currently using an explicit RNG instance:
 ```go
-gridX := int32(50)
-gridY := int32(25)
+seed := rand.New(rand.NewSource(time.Now().UnixNano()))
+```
+Need to implement user passed seed.
+---
+### Configuration
+Currently configured in `main.go`
+```go
+gridX := int32(20)
+gridY := int32(20)
 maxRooms := 10
-```  
-
-Everything else is auto-generated and prints an ascii dungeon map to the terminal
+```
+Need to add config file.
+---
 
 ### Example
 ```
-dozy@debian ~/repos/proc-dungeons (main)$ go run main.go
+$ go run main.go
 Procedurally generating dungeon...
 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
