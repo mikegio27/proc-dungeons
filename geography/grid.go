@@ -1,20 +1,10 @@
-package grid
+package geography
 
 type Grid struct {
 	MaxX int64
 	MaxY int64
 	MinY int64
 	MinX int64
-}
-
-type Path struct {
-	Start Cell
-	Cells []Cell
-}
-
-type Cell struct {
-	X int64
-	Y int64
 }
 
 var current Grid
