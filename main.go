@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	fmt.Println("Generating procedural dungeon")
+	fmt.Println("Procedurally generating dungeon...")
 	gridX := int32(50)
 	gridY := int32(25)
 	maxRooms := 10
