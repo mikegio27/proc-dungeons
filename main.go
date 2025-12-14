@@ -8,8 +8,8 @@ import (
 
 func main() {
 	fmt.Println("Procedurally generating dungeon...")
-	gridX := int32(50)
-	gridY := int32(25)
+	gridX := int32(20)
+	gridY := int32(20)
 	maxRooms := 10
 	geography.InitGrid(gridX, gridY)
 	rooms := geography.Rooms(maxRooms)
