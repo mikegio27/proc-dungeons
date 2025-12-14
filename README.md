@@ -7,8 +7,8 @@ Rooms are placed with size, spacing, and total-coverage limits, then connected v
 | ------ | ----------------------------------------------- |
 | `#`    | Walkable floor (rooms **and** corridors)        |
 | `.`    | Empty / solid space                             |
-| `*`    | Corridor starting cell (usually from grid edge) |
-| `+`    | Origin marker `(0,0)`                           |
+| `*`    | Corridor starting cell (always from grid edge)  |
+| `+`    | Center marker `(0,0)`                           |
 
 ### Seeds
 Currently using an explicit RNG instance:
