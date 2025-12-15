@@ -1,47 +1,10 @@
-package geography
+package generator
 
-import "math"
+import (
+	"math"
 
-type RoomId int
-
-type Room struct {
-	TopLeft     Cell
-	BottomRight Cell
-	Shape       RoomId
-}
-
-const (
-	Rectangle RoomId = iota
-	Circle
-	Square
-	Triangle
+	"github.com/mikegio27/proc-dungeons/model"
 )
-
-var shapeName = map[RoomId]string{
-	Rectangle: "Rectangle",
-	Circle:    "Circle",
-	Square:    "Square",
-	Triangle:  "Triangle",
-}
-
-// String implements fmt.Stringer for RoomId, returning the human-readable
-// name of the shape.
-func (id RoomId) String() string {
-	if name, ok := shapeName[id]; ok {
-		return name
-	}
-	return "Unknown"
-}
-
-// allRoomIds holds all defined RoomId values, derived from shapeName.
-var allRoomIds []RoomId
-
-func init() {
-	allRoomIds = make([]RoomId, 0, len(shapeName))
-	for id := range shapeName {
-		allRoomIds = append(allRoomIds, id)
-	}
-}
 
 // maxRoomAreaFraction controls the maximum fraction of the total grid area
 // that any single room's bounding box is allowed to occupy.
@@ -60,7 +23,8 @@ const minRoomGap = 2
 // given room shape. Dimensions are constrained so that the room stays
 // within a reasonable size relative to the overall plane and preserves the
 // basic proportions of each shape.
-func roomDimensions(shape RoomId, plane Grid) (width, height int32) {
+func (g *Generator) roomDimensions(shape model.RoomId) (width, height int32) {
+	plane := g.cfg.Grid
 	gridWidth := plane.MaxX - plane.MinX + 1
 	gridHeight := plane.MaxY - plane.MinY + 1
 	if gridWidth < 3 {
@@ -78,7 +42,7 @@ func roomDimensions(shape RoomId, plane Grid) (width, height int32) {
 	minSize := int32(3)
 
 	switch shape {
-	case Rectangle, Triangle:
+	case model.Rectangle, model.Triangle:
 		// Allow independent width/height up to half the grid each, but
 		// constrained by the maxArea.
 		maxW := max(gridWidth/2, minSize)
@@ -86,8 +50,8 @@ func roomDimensions(shape RoomId, plane Grid) (width, height int32) {
 
 		// Try random dimensions that satisfy the area constraint.
 		for range 10 {
-			w := rng.Int31n(maxW-minSize+1) + minSize
-			h := rng.Int31n(maxH-minSize+1) + minSize
+			w := g.rng.Int31n(maxW-minSize+1) + minSize
+			h := g.rng.Int31n(maxH-minSize+1) + minSize
 			if w*h <= maxArea {
 				return w, h
 			}
@@ -98,13 +62,13 @@ func roomDimensions(shape RoomId, plane Grid) (width, height int32) {
 		h := min(max(maxArea/w, minSize), maxH)
 		return w, h
 
-	case Circle, Square:
+	case model.Circle, model.Square:
 		// Circles and squares use a square bounding box.
 		maxSideByPlane := min(gridHeight, gridWidth)
 		maxSideByArea := int32(math.Sqrt(float64(maxArea)))
 		maxSide := max(min(maxSideByArea, maxSideByPlane), minSize)
 
-		side := rng.Int31n(maxSide-minSize+1) + minSize
+		side := g.rng.Int31n(maxSide-minSize+1) + minSize
 		return side, side
 
 	default:
@@ -115,10 +79,10 @@ func roomDimensions(shape RoomId, plane Grid) (width, height int32) {
 
 // roomEdges chooses a random top-left position for a room of the given
 // shape so that its bounding box fits entirely within the current grid.
-func roomEdges(shape RoomId) (topLeft, bottomRight Cell) {
-	plane := GetPlane()
+func (g *Generator) roomEdges(shape model.RoomId) (topLeft, bottomRight model.Cell) {
+	plane := g.cfg.Grid
 
-	width, height := roomDimensions(shape, plane)
+	width, height := g.roomDimensions(shape)
 
 	// Ensure the room fits in the grid; if not, clamp to grid size.
 	gridWidth := plane.MaxX - plane.MinX + 1
@@ -138,27 +102,32 @@ func roomEdges(shape RoomId) (topLeft, bottomRight Cell) {
 	yRange := maxTopY - plane.MinY + 1
 
 	// Randomly choose a top-left within the valid ranges.
-	x := rng.Int31n(xRange) + plane.MinX
-	y := rng.Int31n(yRange) + plane.MinY
+	x := g.rng.Int31n(xRange) + plane.MinX
+	y := g.rng.Int31n(yRange) + plane.MinY
 
-	topLeft = Cell{X: x, Y: y}
-	bottomRight = Cell{X: x + width - 1, Y: y + height - 1}
+	topLeft = model.Cell{X: x, Y: y}
+	bottomRight = model.Cell{X: x + width - 1, Y: y + height - 1}
 	return
 }
 
-func RandomRoom() Room {
-	chosen := allRoomIds[rng.Intn(len(allRoomIds))]
+func (g *Generator) RandomRoom() model.Room {
+	shapes := g.cfg.RoomShapes
+	if len(shapes) == 0 {
+		panic("no room shapes configured")
+	}
+
+	shape := shapes[g.rng.Intn(len(shapes))]
 	// top left and bottom right positions must be within the constraints of the roomEdges
-	topLeft, bottomRight := roomEdges(chosen)
-	return Room{
-		Shape:       chosen,
+	topLeft, bottomRight := g.roomEdges(shape)
+	return model.Room{
+		Shape:       shape,
 		TopLeft:     topLeft,
 		BottomRight: bottomRight,
 	}
 }
 
 // roomArea returns the area of the room's bounding box.
-func roomArea(r Room) int32 {
+func roomArea(r model.Room) int32 {
 	width := r.BottomRight.X - r.TopLeft.X + 1
 	height := r.BottomRight.Y - r.TopLeft.Y + 1
 	if width <= 0 || height <= 0 {
@@ -169,7 +138,7 @@ func roomArea(r Room) int32 {
 
 // roomsTooClose reports whether two rooms are closer than the specified
 // gap, based on their bounding boxes.
-func roomsTooClose(a, b Room, gap int32) bool {
+func roomsTooClose(a, b model.Room, gap int32) bool {
 	ax1, ax2 := a.TopLeft.X, a.BottomRight.X
 	ay1, ay2 := a.TopLeft.Y, a.BottomRight.Y
 	bx1, bx2 := b.TopLeft.X, b.BottomRight.X
@@ -184,8 +153,8 @@ func roomsTooClose(a, b Room, gap int32) bool {
 
 // Rooms generates up to maxRooms rooms, enforcing both a minimum spacing
 // between rooms and a cap on the total area that all rooms may occupy.
-func Rooms(maxRooms int) []Room {
-	plane := GetPlane()
+func (g *Generator) Rooms(maxRooms int) []model.Room {
+	plane := g.cfg.Grid
 	gridWidth := plane.MaxX - plane.MinX + 1
 	gridHeight := plane.MaxY - plane.MinY + 1
 	gridArea := gridWidth * gridHeight
@@ -194,14 +163,14 @@ func Rooms(maxRooms int) []Room {
 		maxTotalArea = gridArea
 	}
 
-	rooms := make([]Room, 0, maxRooms)
+	rooms := make([]model.Room, 0, maxRooms)
 	var usedArea int32
 
 	for len(rooms) < maxRooms {
 		success := false
 		// Try several times to place a room that satisfies constraints.
 		for range 20 {
-			candidate := RandomRoom()
+			candidate := g.RandomRoom()
 			area := roomArea(candidate)
 			if area == 0 || usedArea+area > maxTotalArea {
 				continue
@@ -234,17 +203,17 @@ func Rooms(maxRooms int) []Room {
 }
 
 // fillRectRoom marks all cells inside the rectangular bounds of the room.
-func fillRectRoom(visited map[Cell]bool, room Room) {
+func fillRectRoom(visited map[model.Cell]bool, room model.Room) {
 	for y := room.TopLeft.Y; y <= room.BottomRight.Y; y++ {
 		for x := room.TopLeft.X; x <= room.BottomRight.X; x++ {
-			visited[Cell{X: x, Y: y}] = true
+			visited[model.Cell{X: x, Y: y}] = true
 		}
 	}
 }
 
 // fillCircleRoom approximates a circle inside the room's bounding box,
 // smoothing the corners compared to a plain rectangle.
-func fillCircleRoom(visited map[Cell]bool, room Room) {
+func fillCircleRoom(visited map[model.Cell]bool, room model.Room) {
 	// Compute center of the bounding box.
 	cx := float64(room.TopLeft.X+room.BottomRight.X) / 2.0
 	cy := float64(room.TopLeft.Y+room.BottomRight.Y) / 2.0
@@ -260,7 +229,7 @@ func fillCircleRoom(visited map[Cell]bool, room Room) {
 			dx := float64(x) - cx
 			dy := float64(y) - cy
 			if dx*dx+dy*dy <= r2+0.25 {
-				visited[Cell{X: x, Y: y}] = true
+				visited[model.Cell{X: x, Y: y}] = true
 			}
 		}
 	}
@@ -269,7 +238,7 @@ func fillCircleRoom(visited map[Cell]bool, room Room) {
 // fillTriangleRoom fills an isosceles triangle within the room's
 // bounding box. The triangle has its apex at the top and base at the
 // bottom of the box.
-func fillTriangleRoom(visited map[Cell]bool, room Room) {
+func fillTriangleRoom(visited map[model.Cell]bool, room model.Room) {
 	// vertical extent
 	apexY := room.TopLeft.Y
 	baseY := room.BottomRight.Y
@@ -297,21 +266,21 @@ func fillTriangleRoom(visited map[Cell]bool, room Room) {
 		minX := int32(math.Floor(cx - halfWidth))
 		maxX := int32(math.Ceil(cx + halfWidth))
 		for x := minX; x <= maxX; x++ {
-			visited[Cell{X: x, Y: y}] = true
+			visited[model.Cell{X: x, Y: y}] = true
 		}
 	}
 }
 
 // AddRoomEdges marks the cells of each room in the provided visited map
 // according to its shape so that they appear in the drawn grid.
-func AddRoomEdges(visited map[Cell]bool, rooms []Room) {
+func (g *Generator) AddRoomEdges(visited map[model.Cell]bool, rooms []model.Room) {
 	for _, room := range rooms {
 		switch room.Shape {
-		case Rectangle, Square:
+		case model.Rectangle, model.Square:
 			fillRectRoom(visited, room)
-		case Circle:
+		case model.Circle:
 			fillCircleRoom(visited, room)
-		case Triangle:
+		case model.Triangle:
 			fillTriangleRoom(visited, room)
 		default:
 			fillRectRoom(visited, room)

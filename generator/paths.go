@@ -1,26 +1,25 @@
-package geography
+package generator
 
-import "fmt"
+import (
+	"fmt"
 
-type Cell struct {
-	X int32
-	Y int32
-}
+	"github.com/mikegio27/proc-dungeons/model"
+)
 
 // edgeStartingCell returns a random starting cell on the outer edge of the
 // grid that is not inside any room.
-func edgeStartingCell(roomCells map[Cell]bool) Cell {
-	plane := GetPlane()
+func (g *Generator) edgeStartingCell(roomCells map[model.Cell]bool) model.Cell {
+	plane := g.cfg.Grid
 	width := plane.MaxX - plane.MinX + 1
 	height := plane.MaxY - plane.MinY + 1
 	perimeter := 2*(width+height) - 4
 	if perimeter <= 0 {
-		return Cell{X: plane.MinX, Y: plane.MinY}
+		return model.Cell{X: plane.MinX, Y: plane.MinY}
 	}
 
 	for {
 		// Pick a random position along the perimeter.
-		pos := rng.Int31n(perimeter)
+		pos := g.rng.Int31n(perimeter)
 		var x, y int32
 
 		switch {
@@ -42,7 +41,7 @@ func edgeStartingCell(roomCells map[Cell]bool) Cell {
 			y = plane.MaxY - (pos - (2*width + height - 2) + 1)
 		}
 
-		c := Cell{X: x, Y: y}
+		c := model.Cell{X: x, Y: y}
 		if !roomCells[c] {
 			return c
 		}
@@ -51,30 +50,29 @@ func edgeStartingCell(roomCells map[Cell]bool) Cell {
 
 // randomVisitedCell picks a random cell from the visited set that is not
 // inside any room. It returns false if no such cell exists.
-func randomVisitedCell(visited map[Cell]bool, roomCells map[Cell]bool) (Cell, bool) {
-	var candidates []Cell
+func (g *Generator) randomVisitedCell(visited map[model.Cell]bool, roomCells map[model.Cell]bool) (model.Cell, bool) {
+	var candidates []model.Cell
 	for c := range visited {
 		if !roomCells[c] {
 			candidates = append(candidates, c)
 		}
 	}
 	if len(candidates) == 0 {
-		return Cell{}, false
+		return model.Cell{}, false
 	}
-	return candidates[rng.Intn(len(candidates))], true
+	return candidates[g.rng.Intn(len(candidates))], true
 }
 
 // findPath uses a BFS search to find a shortest path from start to target,
 // avoiding room walls and room interiors (except for the final target
 // cell). It returns the sequence of cells to step through, excluding the
 // starting cell.
-func findPath(start, target Cell, roomCells, roomEdges map[Cell]bool) ([]Cell, bool) {
-	plane := GetPlane()
-	dirs := [][2]int32{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
+func (g *Generator) findPath(start, target model.Cell, roomCells, roomEdges map[model.Cell]bool) ([]model.Cell, bool) {
+	dirs := []model.Cell{{X: 1, Y: 0}, {X: -1, Y: 0}, {X: 0, Y: 1}, {X: 0, Y: -1}}
 
-	queue := []Cell{start}
-	prev := make(map[Cell]Cell)
-	seen := make(map[Cell]bool)
+	queue := []model.Cell{start}
+	prev := make(map[model.Cell]model.Cell)
+	seen := make(map[model.Cell]bool)
 	seen[start] = true
 
 	for len(queue) > 0 {
@@ -82,13 +80,13 @@ func findPath(start, target Cell, roomCells, roomEdges map[Cell]bool) ([]Cell, b
 		queue = queue[1:]
 
 		for _, d := range dirs {
-			nx := c.X + d[0]
-			ny := c.Y + d[1]
+			nx := c.X + d.X
+			ny := c.Y + d.Y
 
-			if nx < plane.MinX || nx > plane.MaxX || ny < plane.MinY || ny > plane.MaxY {
+			if !g.cfg.Grid.InBounds(model.Cell{X: nx, Y: ny}) {
 				continue
 			}
-			nc := Cell{X: nx, Y: ny}
+			nc := model.Cell{X: nx, Y: ny}
 			if seen[nc] {
 				continue
 			}
@@ -97,7 +95,7 @@ func findPath(start, target Cell, roomCells, roomEdges map[Cell]bool) ([]Cell, b
 			if nc == target {
 				prev[nc] = c
 				// Reconstruct path from target back to start.
-				var path []Cell
+				var path []model.Cell
 				cur := nc
 				for cur != start {
 					path = append(path, cur)
@@ -124,12 +122,12 @@ func findPath(start, target Cell, roomCells, roomEdges map[Cell]bool) ([]Cell, b
 	return nil, false
 }
 
-func DrawGrid(visited map[Cell]bool, starts map[Cell]bool) {
-	plane := GetPlane()
+func (g *Generator) DrawGrid(visited map[model.Cell]bool, starts map[model.Cell]bool) {
+	plane := g.cfg.Grid
 	for y := plane.MaxY; y >= plane.MinY; y-- {
 		for x := plane.MinX; x <= plane.MaxX; x++ {
 			ch := '.'
-			pt := Cell{X: x, Y: y}
+			pt := model.Cell{X: x, Y: y}
 			if starts[pt] {
 				ch = '*'
 			} else if visited[pt] {
@@ -149,33 +147,38 @@ func DrawGrid(visited map[Cell]bool, starts map[Cell]bool) {
 // enters each room interior, and never runs along room edge walls.
 // It returns both the visited cells (corridors) and the starting cells
 // (typically a single edge start) for display.
-func GenPaths(rooms []Room) (map[Cell]bool, map[Cell]bool) {
+func (g *Generator) GenPaths(rooms []model.Room) (map[model.Cell]bool, map[model.Cell]bool) {
 	// Build maps of all room cells and room edge cells so paths can avoid
 	// running along walls and through rooms. For each room we also choose a
 	// "door" cell on its edge where a corridor is allowed to connect.
-	roomCells := make(map[Cell]bool)
-	roomEdges := make(map[Cell]bool)
-	roomDoors := make([]Cell, len(rooms))
+	roomCells := make(map[model.Cell]bool)
+	roomEdges := make(map[model.Cell]bool)
+	roomDoors := make([]model.Cell, len(rooms))
 	roomHasDoor := make([]bool, len(rooms))
 
 	for i, room := range rooms {
-		local := make(map[Cell]bool)
+		local := make(map[model.Cell]bool)
 
 		switch room.Shape {
-		case Rectangle, Square:
+		case model.Rectangle, model.Square:
 			fillRectRoom(local, room)
-		case Circle:
+		case model.Circle:
 			fillCircleRoom(local, room)
-		case Triangle:
+		case model.Triangle:
 			fillTriangleRoom(local, room)
 		default:
 			fillRectRoom(local, room)
 		}
 
 		// Determine edge cells for this room.
-		var edgeCells []Cell
+		var edgeCells []model.Cell
 		for c := range local {
-			neighbors := []Cell{{c.X + 1, c.Y}, {c.X - 1, c.Y}, {c.X, c.Y + 1}, {c.X, c.Y - 1}}
+			neighbors := []model.Cell{
+				{X: c.X + 1, Y: c.Y},
+				{X: c.X - 1, Y: c.Y},
+				{X: c.X, Y: c.Y + 1},
+				{X: c.X, Y: c.Y - 1},
+			}
 			for _, n := range neighbors {
 				if !local[n] {
 					edgeCells = append(edgeCells, c)
@@ -185,9 +188,9 @@ func GenPaths(rooms []Room) (map[Cell]bool, map[Cell]bool) {
 		}
 
 		// Choose a random edge cell as a door, if any exist.
-		var door Cell
+		var door model.Cell
 		if len(edgeCells) > 0 {
-			door = edgeCells[rng.Intn(len(edgeCells))]
+			door = edgeCells[g.rng.Intn(len(edgeCells))]
 			roomDoors[i] = door
 			roomHasDoor[i] = true
 		}
@@ -208,8 +211,8 @@ func GenPaths(rooms []Room) (map[Cell]bool, map[Cell]bool) {
 		}
 	}
 
-	visited := make(map[Cell]bool)
-	starts := make(map[Cell]bool)
+	visited := make(map[model.Cell]bool)
+	starts := make(map[model.Cell]bool)
 
 	for i := range rooms {
 		// Use the preselected door as the connection point for this room.
@@ -218,24 +221,24 @@ func GenPaths(rooms []Room) (map[Cell]bool, map[Cell]bool) {
 		}
 		target := roomDoors[i]
 
-		var start Cell
+		var start model.Cell
 		if i == 0 {
 			// First room: start from the outer edge.
-			start = edgeStartingCell(roomCells)
+			start = g.edgeStartingCell(roomCells)
 			starts[start] = true
 		} else {
 			// Subsequent rooms: start from an existing corridor cell to
 			// ensure all rooms are connected into one network.
-			if c, ok := randomVisitedCell(visited, roomCells); ok {
+			if c, ok := g.randomVisitedCell(visited, roomCells); ok {
 				start = c
 			} else {
-				start = edgeStartingCell(roomCells)
+				start = g.edgeStartingCell(roomCells)
 				starts[start] = true
 			}
 		}
 		visited[start] = true
 
-		path, ok := findPath(start, target, roomCells, roomEdges)
+		path, ok := g.findPath(start, target, roomCells, roomEdges)
 		if !ok {
 			continue
 		}
