@@ -23,3 +23,14 @@ func (g Grid) Height() int32 {
 func (g Grid) InBounds(c Cell) bool {
 	return c.X >= g.MinX && c.X <= g.MaxX && c.Y >= g.MinY && c.Y <= g.MaxY
 }
+
+func (g Grid) Index(c Cell) (int32, bool) {
+	if !g.InBounds(c) {
+		return -1, false
+	}
+	width := g.Width()
+	xOffset := c.X - g.MinX
+	yOffset := c.Y - g.MinY
+	index := yOffset*width + xOffset
+	return index, true
+}

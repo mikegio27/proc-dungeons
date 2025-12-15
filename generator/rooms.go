@@ -203,17 +203,17 @@ func (g *Generator) Rooms(maxRooms int) []model.Room {
 }
 
 // fillRectRoom marks all cells inside the rectangular bounds of the room.
-func fillRectRoom(visited map[model.Cell]bool, room model.Room) {
+func (g *Generator) eachRect(room model.Room, fn func(model.Cell)) {
 	for y := room.TopLeft.Y; y <= room.BottomRight.Y; y++ {
 		for x := room.TopLeft.X; x <= room.BottomRight.X; x++ {
-			visited[model.Cell{X: x, Y: y}] = true
+			fn(model.Cell{X: x, Y: y})
 		}
 	}
 }
 
 // fillCircleRoom approximates a circle inside the room's bounding box,
 // smoothing the corners compared to a plain rectangle.
-func fillCircleRoom(visited map[model.Cell]bool, room model.Room) {
+func (g *Generator) eachCircle(room model.Room, fn func(model.Cell)) {
 	// Compute center of the bounding box.
 	cx := float64(room.TopLeft.X+room.BottomRight.X) / 2.0
 	cy := float64(room.TopLeft.Y+room.BottomRight.Y) / 2.0
@@ -229,7 +229,7 @@ func fillCircleRoom(visited map[model.Cell]bool, room model.Room) {
 			dx := float64(x) - cx
 			dy := float64(y) - cy
 			if dx*dx+dy*dy <= r2+0.25 {
-				visited[model.Cell{X: x, Y: y}] = true
+				fn(model.Cell{X: x, Y: y})
 			}
 		}
 	}
@@ -238,20 +238,20 @@ func fillCircleRoom(visited map[model.Cell]bool, room model.Room) {
 // fillTriangleRoom fills an isosceles triangle within the room's
 // bounding box. The triangle has its apex at the top and base at the
 // bottom of the box.
-func fillTriangleRoom(visited map[model.Cell]bool, room model.Room) {
+func (g *Generator) eachTriangle(room model.Room, fn func(model.Cell)) {
 	// vertical extent
 	apexY := room.TopLeft.Y
 	baseY := room.BottomRight.Y
 	if baseY < apexY {
 		// degenerate, just treat as rectangle
-		fillRectRoom(visited, room)
+		g.eachRect(room, fn)
 		return
 	}
 
 	height := float64(baseY - apexY)
 	if height == 0 {
 		// single row, again just a rectangle
-		fillRectRoom(visited, room)
+		g.eachRect(room, fn)
 		return
 	}
 
@@ -266,24 +266,30 @@ func fillTriangleRoom(visited map[model.Cell]bool, room model.Room) {
 		minX := int32(math.Floor(cx - halfWidth))
 		maxX := int32(math.Ceil(cx + halfWidth))
 		for x := minX; x <= maxX; x++ {
-			visited[model.Cell{X: x, Y: y}] = true
+			fn(model.Cell{X: x, Y: y})
 		}
 	}
 }
 
 // AddRoomEdges marks the cells of each room in the provided visited map
 // according to its shape so that they appear in the drawn grid.
-func (g *Generator) AddRoomEdges(visited map[model.Cell]bool, rooms []model.Room) {
+func (g *Generator) AddRoomEdges(d *model.Dungeon, rooms []model.Room) {
 	for _, room := range rooms {
-		switch room.Shape {
-		case model.Rectangle, model.Square:
-			fillRectRoom(visited, room)
-		case model.Circle:
-			fillCircleRoom(visited, room)
-		case model.Triangle:
-			fillTriangleRoom(visited, room)
-		default:
-			fillRectRoom(visited, room)
-		}
+		g.ForEachRoomCell(room, func(c model.Cell) {
+			d.Set(c, model.TileRoomFloor)
+		})
+	}
+}
+
+func (g *Generator) ForEachRoomCell(room model.Room, fn func(model.Cell)) {
+	switch room.Shape {
+	case model.Rectangle, model.Square:
+		g.eachRect(room, fn)
+	case model.Circle:
+		g.eachCircle(room, fn)
+	case model.Triangle:
+		g.eachTriangle(room, fn)
+	default:
+		g.eachRect(room, fn)
 	}
 }

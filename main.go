@@ -28,5 +28,7 @@ func main() {
 			model.Triangle,
 		},
 	}, seed)
-	g.Generate()
+	d := g.Generate()
+	g.DrawDungeon(d)
+	fmt.Printf("Rooms: %v\n", d.Rooms)
 }

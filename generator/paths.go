@@ -1,8 +1,6 @@
 package generator
 
 import (
-	"fmt"
-
 	"github.com/mikegio27/proc-dungeons/model"
 )
 
@@ -50,9 +48,9 @@ func (g *Generator) edgeStartingCell(roomCells map[model.Cell]bool) model.Cell {
 
 // randomVisitedCell picks a random cell from the visited set that is not
 // inside any room. It returns false if no such cell exists.
-func (g *Generator) randomVisitedCell(visited map[model.Cell]bool, roomCells map[model.Cell]bool) (model.Cell, bool) {
+func (g *Generator) randomCorridorCell(corridors map[model.Cell]bool, roomCells map[model.Cell]bool) (model.Cell, bool) {
 	var candidates []model.Cell
-	for c := range visited {
+	for c := range corridors {
 		if !roomCells[c] {
 			candidates = append(candidates, c)
 		}
@@ -122,32 +120,12 @@ func (g *Generator) findPath(start, target model.Cell, roomCells, roomEdges map[
 	return nil, false
 }
 
-func (g *Generator) DrawGrid(visited map[model.Cell]bool, starts map[model.Cell]bool) {
-	plane := g.cfg.Grid
-	for y := plane.MaxY; y >= plane.MinY; y-- {
-		for x := plane.MinX; x <= plane.MaxX; x++ {
-			ch := '.'
-			pt := model.Cell{X: x, Y: y}
-			if starts[pt] {
-				ch = '*'
-			} else if visited[pt] {
-				ch = '#'
-			}
-			if x == 0 && y == 0 {
-				ch = '+'
-			}
-			fmt.Printf("%c ", ch)
-		}
-		fmt.Println()
-	}
-}
-
 // GenPaths generates a set of paths such that each room is connected to a
 // single network of corridors that starts on the grid edge, eventually
 // enters each room interior, and never runs along room edge walls.
 // It returns both the visited cells (corridors) and the starting cells
 // (typically a single edge start) for display.
-func (g *Generator) GenPaths(rooms []model.Room) (map[model.Cell]bool, map[model.Cell]bool) {
+func (g *Generator) GenPaths(d *model.Dungeon, rooms []model.Room) []model.Cell {
 	// Build maps of all room cells and room edge cells so paths can avoid
 	// running along walls and through rooms. For each room we also choose a
 	// "door" cell on its edge where a corridor is allowed to connect.
@@ -158,17 +136,7 @@ func (g *Generator) GenPaths(rooms []model.Room) (map[model.Cell]bool, map[model
 
 	for i, room := range rooms {
 		local := make(map[model.Cell]bool)
-
-		switch room.Shape {
-		case model.Rectangle, model.Square:
-			fillRectRoom(local, room)
-		case model.Circle:
-			fillCircleRoom(local, room)
-		case model.Triangle:
-			fillTriangleRoom(local, room)
-		default:
-			fillRectRoom(local, room)
-		}
+		g.ForEachRoomCell(room, func(c model.Cell) { local[c] = true })
 
 		// Determine edge cells for this room.
 		var edgeCells []model.Cell
@@ -211,8 +179,8 @@ func (g *Generator) GenPaths(rooms []model.Room) (map[model.Cell]bool, map[model
 		}
 	}
 
-	visited := make(map[model.Cell]bool)
-	starts := make(map[model.Cell]bool)
+	corridors := make(map[model.Cell]bool)
+	var starts []model.Cell
 
 	for i := range rooms {
 		// Use the preselected door as the connection point for this room.
@@ -222,30 +190,38 @@ func (g *Generator) GenPaths(rooms []model.Room) (map[model.Cell]bool, map[model
 		target := roomDoors[i]
 
 		var start model.Cell
-		if i == 0 {
-			// First room: start from the outer edge.
+		if len(corridors) == 0 {
+			// first connection: start from edge
 			start = g.edgeStartingCell(roomCells)
-			starts[start] = true
+			starts = append(starts, start)
 		} else {
 			// Subsequent rooms: start from an existing corridor cell to
 			// ensure all rooms are connected into one network.
-			if c, ok := g.randomVisitedCell(visited, roomCells); ok {
+			if c, ok := g.randomCorridorCell(corridors, roomCells); ok {
 				start = c
 			} else {
 				start = g.edgeStartingCell(roomCells)
-				starts[start] = true
+				starts = append(starts, start)
 			}
 		}
-		visited[start] = true
+		if d.At(start) != model.TileDoor {
+			d.Set(start, model.TileCorridor)
+		}
+		corridors[start] = true
 
 		path, ok := g.findPath(start, target, roomCells, roomEdges)
 		if !ok {
 			continue
 		}
 		for _, c := range path {
-			visited[c] = true
+			// preserve doors
+			if d.At(c) == model.TileDoor {
+				continue
+			}
+			d.Set(c, model.TileCorridor)
+			corridors[c] = true
 		}
 	}
 
-	return visited, starts
+	return starts
 }
