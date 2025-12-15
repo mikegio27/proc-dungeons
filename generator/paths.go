@@ -61,6 +61,26 @@ func (g *Generator) randomCorridorCell(corridors map[model.Cell]bool, roomCells 
 	return candidates[g.rng.Intn(len(candidates))], true
 }
 
+func (g *Generator) carveCorridor(d *model.Dungeon, c model.Cell) {
+	w := g.cfg.CorridorW
+	if w < 1 {
+		w = 1
+	}
+	r := w / 2
+
+	for y := c.Y - r; y <= c.Y+r; y++ {
+		for x := c.X - r; x <= c.X+r; x++ {
+			cc := model.Cell{X: x, Y: y}
+			if !d.InBounds(cc) {
+				continue
+			}
+			if d.At(cc) == model.TileEmpty {
+				d.Set(cc, model.TileCorridor)
+			}
+		}
+	}
+}
+
 // findPath uses a BFS search to find a shortest path from start to target,
 // avoiding room walls and room interiors (except for the final target
 // cell). It returns the sequence of cells to step through, excluding the
@@ -161,6 +181,7 @@ func (g *Generator) GenPaths(d *model.Dungeon, rooms []model.Room) []model.Cell 
 			door = edgeCells[g.rng.Intn(len(edgeCells))]
 			roomDoors[i] = door
 			roomHasDoor[i] = true
+			d.Set(door, model.TileDoor)
 		}
 
 		// Copy into global room cell and edge maps, skipping the door so that
@@ -178,7 +199,6 @@ func (g *Generator) GenPaths(d *model.Dungeon, rooms []model.Room) []model.Cell 
 			roomEdges[c] = true
 		}
 	}
-
 	corridors := make(map[model.Cell]bool)
 	var starts []model.Cell
 
@@ -207,6 +227,13 @@ func (g *Generator) GenPaths(d *model.Dungeon, rooms []model.Room) []model.Cell 
 		if d.At(start) != model.TileDoor {
 			d.Set(start, model.TileCorridor)
 		}
+		blocked := g.expand(roomCells, g.cfg.CorridorBuff)
+
+		// Important: allow doors to be reachable
+		for _, door := range roomDoors {
+			delete(blocked, door)
+		}
+
 		corridors[start] = true
 
 		path, ok := g.findPath(start, target, roomCells, roomEdges)
@@ -218,10 +245,25 @@ func (g *Generator) GenPaths(d *model.Dungeon, rooms []model.Room) []model.Cell 
 			if d.At(c) == model.TileDoor {
 				continue
 			}
-			d.Set(c, model.TileCorridor)
+			g.carveCorridor(d, c)
 			corridors[c] = true
 		}
 	}
 
 	return starts
+}
+
+func (g *Generator) expand(cells map[model.Cell]bool, r int32) map[model.Cell]bool {
+	out := make(map[model.Cell]bool, len(cells))
+	for c := range cells {
+		for dy := -r; dy <= r; dy++ {
+			for dx := -r; dx <= r; dx++ {
+				n := model.Cell{X: c.X + dx, Y: c.Y + dy}
+				if g.cfg.Grid.InBounds(n) {
+					out[n] = true
+				}
+			}
+		}
+	}
+	return out
 }

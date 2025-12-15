@@ -1,7 +1,6 @@
 package generator
 
 import (
-	"fmt"
 	"math/rand"
 	"time"
 
@@ -9,14 +8,15 @@ import (
 )
 
 type Config struct {
-	Grid       model.Grid
-	MaxRooms   int
-	RoomShapes []model.RoomId
-	RoomMinW   int32
-	RoomMaxW   int32
-	RoomMinH   int32
-	RoomMaxH   int32
-	CorridorW  int32
+	Grid         model.Grid
+	MaxRooms     int
+	RoomShapes   []model.RoomId
+	RoomMinW     int32
+	RoomMaxW     int32
+	RoomMinH     int32
+	RoomMaxH     int32
+	CorridorW    int32
+	CorridorBuff int32
 }
 
 type Generator struct {
@@ -43,28 +43,4 @@ func (g *Generator) Generate() model.Dungeon {
 	g.AddRoomEdges(&d, rooms)
 
 	return d
-}
-
-func (g *Generator) DrawDungeon(d model.Dungeon) {
-	plane := d.Grid
-	starts := make(map[model.Cell]bool, len(d.Starts))
-	for _, s := range d.Starts {
-		starts[s] = true
-	}
-
-	for y := plane.MaxY; y >= plane.MinY; y-- {
-		for x := plane.MinX; x <= plane.MaxX; x++ {
-			pt := model.Cell{X: x, Y: y}
-
-			ch := d.At(pt).Rune()
-			if starts[pt] {
-				ch = '*'
-			}
-			if x == 0 && y == 0 {
-				ch = '+'
-			}
-			fmt.Printf("%c ", ch)
-		}
-		fmt.Println()
-	}
 }

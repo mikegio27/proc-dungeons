@@ -6,6 +6,7 @@ import (
 
 	"github.com/mikegio27/proc-dungeons/generator"
 	"github.com/mikegio27/proc-dungeons/model"
+	"github.com/mikegio27/proc-dungeons/renderer"
 )
 
 func main() {
@@ -18,9 +19,10 @@ func main() {
 	gridY := int32(20)
 	maxRooms := 10
 	g := generator.New(generator.Config{
-		Grid:      model.Grid{MaxX: gridX, MaxY: gridY, MinX: -gridX, MinY: -gridY},
-		MaxRooms:  maxRooms,
-		CorridorW: 1,
+		Grid:         model.Grid{MaxX: gridX, MaxY: gridY, MinX: -gridX, MinY: -gridY},
+		MaxRooms:     maxRooms,
+		CorridorW:    1,
+		CorridorBuff: 2,
 		RoomShapes: []model.RoomId{
 			model.Rectangle,
 			model.Circle,
@@ -29,6 +31,7 @@ func main() {
 		},
 	}, seed)
 	d := g.Generate()
-	g.DrawDungeon(d)
+	//renderer.DrawWalls(d)
+	renderer.DrawDungeon(d)
 	fmt.Printf("Rooms: %v\n", d.Rooms)
 }

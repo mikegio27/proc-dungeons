@@ -271,12 +271,15 @@ func (g *Generator) eachTriangle(room model.Room, fn func(model.Cell)) {
 	}
 }
 
-// AddRoomEdges marks the cells of each room in the provided visited map
+// AddRoomEdges marks the cells of each room in the map
 // according to its shape so that they appear in the drawn grid.
+// avoids collisions with existing tiles.
 func (g *Generator) AddRoomEdges(d *model.Dungeon, rooms []model.Room) {
 	for _, room := range rooms {
 		g.ForEachRoomCell(room, func(c model.Cell) {
-			d.Set(c, model.TileRoomFloor)
+			if d.At(c) == model.TileEmpty {
+				d.Set(c, model.TileRoomFloor)
+			}
 		})
 	}
 }

@@ -8,6 +8,7 @@ const (
 	TileRoomFloor
 	TileCorridor
 	TileDoor
+	TileWall
 )
 
 func (t Tile) String() string {
@@ -37,6 +38,8 @@ func (t Tile) Rune() rune {
 		return '#'
 	case TileDoor:
 		return '+'
+	case TileWall:
+		return '▒'
 	default:
 		return '?'
 	}
