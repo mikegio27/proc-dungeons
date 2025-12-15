@@ -22,7 +22,7 @@ func main() {
 		Grid:         model.Grid{MaxX: gridX, MaxY: gridY, MinX: -gridX, MinY: -gridY},
 		MaxRooms:     maxRooms,
 		CorridorW:    1,
-		CorridorBuff: 2,
+		CorridorBuff: 1,
 		RoomShapes: []model.RoomId{
 			model.Rectangle,
 			model.Circle,

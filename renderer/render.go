@@ -45,7 +45,7 @@ func DrawWalls(d model.Dungeon) {
 			for _, di := range dirs {
 				n := model.Cell{X: c.X + di.X, Y: c.Y + di.Y}
 				switch d.At(n) {
-				case model.TileRoomFloor, model.TileCorridor, model.TileDoor:
+				case model.TileRoomFloor, model.TileDoor:
 					d.Set(c, model.TileWall)
 					goto next
 				}

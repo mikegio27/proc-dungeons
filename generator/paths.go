@@ -1,156 +1,19 @@
 package generator
 
-import (
-	"github.com/mikegio27/proc-dungeons/model"
-)
+import "github.com/mikegio27/proc-dungeons/model"
 
-// edgeStartingCell returns a random starting cell on the outer edge of the
-// grid that is not inside any room.
-func (g *Generator) edgeStartingCell(roomCells map[model.Cell]bool) model.Cell {
-	plane := g.cfg.Grid
-	width := plane.MaxX - plane.MinX + 1
-	height := plane.MaxY - plane.MinY + 1
-	perimeter := 2*(width+height) - 4
-	if perimeter <= 0 {
-		return model.Cell{X: plane.MinX, Y: plane.MinY}
-	}
-
-	for {
-		// Pick a random position along the perimeter.
-		pos := g.rng.Int31n(perimeter)
-		var x, y int32
-
-		switch {
-		case pos < width:
-			// bottom edge, left to right
-			x = plane.MinX + pos
-			y = plane.MinY
-		case pos < width+height-1:
-			// right edge, bottom to top (excluding bottom corner)
-			x = plane.MaxX
-			y = plane.MinY + (pos - width + 1)
-		case pos < 2*width+height-2:
-			// top edge, right to left (excluding right corner)
-			x = plane.MaxX - (pos - (width + height - 1))
-			y = plane.MaxY
-		default:
-			// left edge, top to bottom (excluding top and bottom corners)
-			x = plane.MinX
-			y = plane.MaxY - (pos - (2*width + height - 2) + 1)
-		}
-
-		c := model.Cell{X: x, Y: y}
-		if !roomCells[c] {
-			return c
-		}
-	}
-}
-
-// randomVisitedCell picks a random cell from the visited set that is not
-// inside any room. It returns false if no such cell exists.
-func (g *Generator) randomCorridorCell(corridors map[model.Cell]bool, roomCells map[model.Cell]bool) (model.Cell, bool) {
-	var candidates []model.Cell
-	for c := range corridors {
-		if !roomCells[c] {
-			candidates = append(candidates, c)
-		}
-	}
-	if len(candidates) == 0 {
-		return model.Cell{}, false
-	}
-	return candidates[g.rng.Intn(len(candidates))], true
-}
-
-func (g *Generator) carveCorridor(d *model.Dungeon, c model.Cell) {
-	w := g.cfg.CorridorW
-	if w < 1 {
-		w = 1
-	}
-	r := w / 2
-
-	for y := c.Y - r; y <= c.Y+r; y++ {
-		for x := c.X - r; x <= c.X+r; x++ {
-			cc := model.Cell{X: x, Y: y}
-			if !d.InBounds(cc) {
-				continue
-			}
-			if d.At(cc) == model.TileEmpty {
-				d.Set(cc, model.TileCorridor)
-			}
-		}
-	}
-}
-
-// findPath uses a BFS search to find a shortest path from start to target,
-// avoiding room walls and room interiors (except for the final target
-// cell). It returns the sequence of cells to step through, excluding the
-// starting cell.
-func (g *Generator) findPath(start, target model.Cell, roomCells, roomEdges map[model.Cell]bool) ([]model.Cell, bool) {
-	dirs := []model.Cell{{X: 1, Y: 0}, {X: -1, Y: 0}, {X: 0, Y: 1}, {X: 0, Y: -1}}
-
-	queue := []model.Cell{start}
-	prev := make(map[model.Cell]model.Cell)
-	seen := make(map[model.Cell]bool)
-	seen[start] = true
-
-	for len(queue) > 0 {
-		c := queue[0]
-		queue = queue[1:]
-
-		for _, d := range dirs {
-			nx := c.X + d.X
-			ny := c.Y + d.Y
-
-			if !g.cfg.Grid.InBounds(model.Cell{X: nx, Y: ny}) {
-				continue
-			}
-			nc := model.Cell{X: nx, Y: ny}
-			if seen[nc] {
-				continue
-			}
-
-			// Always allow reaching the target, even if it's inside the room.
-			if nc == target {
-				prev[nc] = c
-				// Reconstruct path from target back to start.
-				var path []model.Cell
-				cur := nc
-				for cur != start {
-					path = append(path, cur)
-					cur = prev[cur]
-				}
-				// Reverse to get start->target order (excluding start).
-				for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
-					path[i], path[j] = path[j], path[i]
-				}
-				return path, true
-			}
-
-			// Do not walk on room walls or through room interiors.
-			if roomEdges[nc] || roomCells[nc] {
-				continue
-			}
-
-			seen[nc] = true
-			prev[nc] = c
-			queue = append(queue, nc)
-		}
-	}
-
-	return nil, false
-}
-
-// GenPaths generates a set of paths such that each room is connected to a
-// single network of corridors that starts on the grid edge, eventually
-// enters each room interior, and never runs along room edge walls.
-// It returns both the visited cells (corridors) and the starting cells
-// (typically a single edge start) for display.
+// GenPaths connects every room to a single corridor network.
+// - One door per room (edge cell)
+// - First corridor starts at perimeter
+// - Subsequent rooms connect from existing corridor cell
+// - Corridors keep distance from rooms via CorridorBuff (except at doors)
+// - CorridorW controls thickness
 func (g *Generator) GenPaths(d *model.Dungeon, rooms []model.Room) []model.Cell {
-	// Build maps of all room cells and room edge cells so paths can avoid
-	// running along walls and through rooms. For each room we also choose a
-	// "door" cell on its edge where a corridor is allowed to connect.
-	roomCells := make(map[model.Cell]bool)
-	roomEdges := make(map[model.Cell]bool)
+	// ---- 1) Room footprints + doors ----
+
+	roomCells := make(map[model.Cell]bool) // interior (excluding door)
+	roomEdges := make(map[model.Cell]bool) // edge ring (excluding door)
+
 	roomDoors := make([]model.Cell, len(rooms))
 	roomHasDoor := make([]bool, len(rooms))
 
@@ -158,7 +21,7 @@ func (g *Generator) GenPaths(d *model.Dungeon, rooms []model.Room) []model.Cell 
 		local := make(map[model.Cell]bool)
 		g.ForEachRoomCell(room, func(c model.Cell) { local[c] = true })
 
-		// Determine edge cells for this room.
+		// edge cells: any cell with a neighbor not in local
 		var edgeCells []model.Cell
 		for c := range local {
 			neighbors := []model.Cell{
@@ -175,35 +38,64 @@ func (g *Generator) GenPaths(d *model.Dungeon, rooms []model.Room) []model.Cell 
 			}
 		}
 
-		// Choose a random edge cell as a door, if any exist.
-		var door model.Cell
+		// choose a door
 		if len(edgeCells) > 0 {
-			door = edgeCells[g.rng.Intn(len(edgeCells))]
+			door := edgeCells[g.rng.Intn(len(edgeCells))]
 			roomDoors[i] = door
 			roomHasDoor[i] = true
 			d.Set(door, model.TileDoor)
-		}
 
-		// Copy into global room cell and edge maps, skipping the door so that
-		// corridors can pass through that cell.
-		for c := range local {
-			if roomHasDoor[i] && c == door {
-				continue
+			// add to global maps, skipping door
+			for c := range local {
+				if c == door {
+					continue
+				}
+				roomCells[c] = true
 			}
-			roomCells[c] = true
-		}
-		for _, c := range edgeCells {
-			if roomHasDoor[i] && c == door {
-				continue
+			for _, c := range edgeCells {
+				if c == door {
+					continue
+				}
+				roomEdges[c] = true
 			}
-			roomEdges[c] = true
+		} else {
+			// degenerate: treat whole thing as roomCells
+			for c := range local {
+				roomCells[c] = true
+			}
 		}
 	}
+
+	roomSolid := mergeBoolMaps(roomCells, roomEdges)
+
+	// ---- 2) Build ONE blocked map (rooms + edge ring + buffer) ----
+
+	// Base blocked: everything within CorridorBuff of rooms/edges.
+	blockedBase := g.expand(roomSolid, g.cfg.CorridorBuff)
+	for c := range roomSolid {
+		blockedBase[c] = true
+	}
+
+	// Allow doors + a *small* approach area so BFS can actually attach.
+	// If you clear the full buff radius, you basically undo the whole idea.
+	for i := range rooms {
+		if !roomHasDoor[i] {
+			continue
+		}
+		door := roomDoors[i]
+		// Door cell must be allowed
+		delete(blockedBase, door)
+
+		// Also allow a 1-tile halo outside the door so corridors can “plug in”
+		g.clearRadius(blockedBase, door, 1)
+	}
+
+	// ---- 3) Connect rooms into a single corridor network ----
+
 	corridors := make(map[model.Cell]bool)
 	var starts []model.Cell
 
 	for i := range rooms {
-		// Use the preselected door as the connection point for this room.
 		if !roomHasDoor[i] {
 			continue
 		}
@@ -211,41 +103,33 @@ func (g *Generator) GenPaths(d *model.Dungeon, rooms []model.Room) []model.Cell 
 
 		var start model.Cell
 		if len(corridors) == 0 {
-			// first connection: start from edge
-			start = g.edgeStartingCell(roomCells)
+			start = g.edgeStartingCell(roomSolid)
 			starts = append(starts, start)
 		} else {
-			// Subsequent rooms: start from an existing corridor cell to
-			// ensure all rooms are connected into one network.
-			if c, ok := g.randomCorridorCell(corridors, roomCells); ok {
+			if c, ok := g.randomCorridorCell(corridors); ok {
 				start = c
 			} else {
-				start = g.edgeStartingCell(roomCells)
+				start = g.edgeStartingCell(roomSolid)
 				starts = append(starts, start)
 			}
 		}
+
+		// carve start
 		if d.At(start) != model.TileDoor {
-			d.Set(start, model.TileCorridor)
+			g.carveCorridor(d, start, blockedBase)
 		}
-		blocked := g.expand(roomCells, g.cfg.CorridorBuff)
-
-		// Important: allow doors to be reachable
-		for _, door := range roomDoors {
-			delete(blocked, door)
-		}
-
 		corridors[start] = true
 
-		path, ok := g.findPath(start, target, roomCells, roomEdges)
+		path, ok := g.findPath(start, target, blockedBase)
 		if !ok {
 			continue
 		}
+
 		for _, c := range path {
-			// preserve doors
 			if d.At(c) == model.TileDoor {
 				continue
 			}
-			g.carveCorridor(d, c)
+			g.carveCorridor(d, c, blockedBase)
 			corridors[c] = true
 		}
 	}
@@ -253,8 +137,138 @@ func (g *Generator) GenPaths(d *model.Dungeon, rooms []model.Room) []model.Cell 
 	return starts
 }
 
+// edgeStartingCell returns a random cell on the perimeter that is not inside roomSolid.
+func (g *Generator) edgeStartingCell(roomSolid map[model.Cell]bool) model.Cell {
+	plane := g.cfg.Grid
+	width := plane.MaxX - plane.MinX + 1
+	height := plane.MaxY - plane.MinY + 1
+	perimeter := 2*(width+height) - 4
+	if perimeter <= 0 {
+		return model.Cell{X: plane.MinX, Y: plane.MinY}
+	}
+
+	for {
+		pos := g.rng.Int31n(perimeter)
+		var x, y int32
+
+		switch {
+		case pos < width:
+			x = plane.MinX + pos
+			y = plane.MinY
+		case pos < width+height-1:
+			x = plane.MaxX
+			y = plane.MinY + (pos - width + 1)
+		case pos < 2*width+height-2:
+			x = plane.MaxX - (pos - (width + height - 1))
+			y = plane.MaxY
+		default:
+			x = plane.MinX
+			y = plane.MaxY - (pos - (2*width + height - 2) + 1)
+		}
+
+		c := model.Cell{X: x, Y: y}
+		if !roomSolid[c] {
+			return c
+		}
+	}
+}
+
+// randomCorridorCell picks a random existing corridor cell.
+func (g *Generator) randomCorridorCell(corridors map[model.Cell]bool) (model.Cell, bool) {
+	if len(corridors) == 0 {
+		return model.Cell{}, false
+	}
+	cands := make([]model.Cell, 0, len(corridors))
+	for c := range corridors {
+		cands = append(cands, c)
+	}
+	return cands[g.rng.Intn(len(cands))], true
+}
+
+// carveCorridor writes corridor tiles around center cell according to CorridorW,
+// refuses blocked cells, and never overwrites non-empty tiles.
+func (g *Generator) carveCorridor(d *model.Dungeon, center model.Cell, blocked map[model.Cell]bool) {
+	w := g.cfg.CorridorW
+	if w < 1 {
+		w = 1
+	}
+	r := w / 2
+
+	for y := center.Y - r; y <= center.Y+r; y++ {
+		for x := center.X - r; x <= center.X+r; x++ {
+			c := model.Cell{X: x, Y: y}
+			if !d.InBounds(c) {
+				continue
+			}
+			if blocked[c] {
+				continue
+			}
+			if d.At(c) != model.TileEmpty {
+				continue
+			}
+			d.Set(c, model.TileCorridor)
+		}
+	}
+}
+
+// findPath BFS from start to target, avoiding blocked cells.
+// Returns path excluding start (includes target).
+func (g *Generator) findPath(start, target model.Cell, blocked map[model.Cell]bool) ([]model.Cell, bool) {
+	dirs := []model.Cell{{X: 1, Y: 0}, {X: -1, Y: 0}, {X: 0, Y: 1}, {X: 0, Y: -1}}
+
+	queue := []model.Cell{start}
+	prev := make(map[model.Cell]model.Cell)
+	seen := make(map[model.Cell]bool)
+	seen[start] = true
+
+	for len(queue) > 0 {
+		c := queue[0]
+		queue = queue[1:]
+
+		for _, d := range dirs {
+			nc := model.Cell{X: c.X + d.X, Y: c.Y + d.Y}
+			if !g.cfg.Grid.InBounds(nc) {
+				continue
+			}
+			if seen[nc] {
+				continue
+			}
+
+			// 🔥 allow reaching target even if it's blocked
+			if nc != target && blocked[nc] {
+				continue
+			}
+
+			seen[nc] = true
+			prev[nc] = c
+
+			if nc == target {
+				var path []model.Cell
+				for cur := nc; cur != start; cur = prev[cur] {
+					path = append(path, cur)
+				}
+				for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
+					path[i], path[j] = path[j], path[i]
+				}
+				return path, true
+			}
+
+			queue = append(queue, nc)
+		}
+	}
+
+	return nil, false
+}
+
+// expand includes all cells within Chebyshev radius r of any input cell.
 func (g *Generator) expand(cells map[model.Cell]bool, r int32) map[model.Cell]bool {
 	out := make(map[model.Cell]bool, len(cells))
+	if r <= 0 {
+		for c := range cells {
+			out[c] = true
+		}
+		return out
+	}
 	for c := range cells {
 		for dy := -r; dy <= r; dy++ {
 			for dx := -r; dx <= r; dx++ {
@@ -264,6 +278,28 @@ func (g *Generator) expand(cells map[model.Cell]bool, r int32) map[model.Cell]bo
 				}
 			}
 		}
+	}
+	return out
+}
+
+func (g *Generator) clearRadius(m map[model.Cell]bool, center model.Cell, r int32) {
+	if r < 0 {
+		return
+	}
+	for dy := -r; dy <= r; dy++ {
+		for dx := -r; dx <= r; dx++ {
+			delete(m, model.Cell{X: center.X + dx, Y: center.Y + dy})
+		}
+	}
+}
+
+func mergeBoolMaps(a, b map[model.Cell]bool) map[model.Cell]bool {
+	out := make(map[model.Cell]bool, len(a)+len(b))
+	for k := range a {
+		out[k] = true
+	}
+	for k := range b {
+		out[k] = true
 	}
 	return out
 }
