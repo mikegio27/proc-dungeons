@@ -6,7 +6,7 @@ import (
 
 	"github.com/mikegio27/proc-dungeons/generator"
 	"github.com/mikegio27/proc-dungeons/model"
-	"github.com/mikegio27/proc-dungeons/renderer"
+	"github.com/mikegio27/proc-dungeons/render"
 )
 
 func main() {
@@ -31,7 +31,6 @@ func main() {
 		},
 	}, seed)
 	d := g.Generate()
-	//renderer.DrawWalls(d)
-	renderer.DrawDungeon(d)
+	render.DrawDungeon(&d)
 	fmt.Printf("Rooms: %v\n", d.Rooms)
 }

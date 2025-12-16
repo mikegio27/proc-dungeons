@@ -40,7 +40,19 @@ func (g *Generator) GenPaths(d *model.Dungeon, rooms []model.Room) []model.Cell 
 
 		// choose a door
 		if len(edgeCells) > 0 {
-			door := edgeCells[g.rng.Intn(len(edgeCells))]
+			// ensure door is not on the edge of the dungeon grid
+			var validEdgeCells []model.Cell
+			for _, c := range edgeCells {
+				if c.X > g.cfg.Grid.MinX && c.X < g.cfg.Grid.MaxX &&
+					c.Y > g.cfg.Grid.MinY && c.Y < g.cfg.Grid.MaxY {
+					validEdgeCells = append(validEdgeCells, c)
+				}
+			}
+			if len(validEdgeCells) == 0 {
+				// fallback to any edge cell
+				validEdgeCells = edgeCells
+			}
+			door := validEdgeCells[g.rng.Intn(len(validEdgeCells))]
 			roomDoors[i] = door
 			roomHasDoor[i] = true
 			d.Set(door, model.TileDoor)
@@ -234,7 +246,7 @@ func (g *Generator) findPath(start, target model.Cell, blocked map[model.Cell]bo
 				continue
 			}
 
-			// 🔥 allow reaching target even if it's blocked
+			// allow reaching target even if it's blocked
 			if nc != target && blocked[nc] {
 				continue
 			}
