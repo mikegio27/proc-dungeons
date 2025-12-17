@@ -10,7 +10,6 @@ import (
 func DrawDungeon(d *model.Dungeon) {
 
 	g := d.Grid
-
 	starts := make(map[model.Cell]bool, len(d.Starts))
 	for _, s := range d.Starts {
 		starts[s] = true

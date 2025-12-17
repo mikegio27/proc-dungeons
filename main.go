@@ -15,9 +15,9 @@ func main() {
 	// TODO: Allow user to specify seed via command-line argument
 	seed := time.Now().UnixNano()
 	fmt.Printf("Using seed: %d\n", seed)
-	gridX := int32(20)
+	gridX := int32(50)
 	gridY := int32(20)
-	maxRooms := 10
+	maxRooms := 20
 	g := generator.New(generator.Config{
 		Grid:         model.Grid{MaxX: gridX, MaxY: gridY, MinX: -gridX, MinY: -gridY},
 		MaxRooms:     maxRooms,

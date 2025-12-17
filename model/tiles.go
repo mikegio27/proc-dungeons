@@ -27,7 +27,6 @@ func (t Tile) String() string {
 }
 
 // Rune is an ASCII glyph for a simple renderer.
-// TODO: move this out into a renderer package later if it makes sense.
 func (t Tile) Rune() rune {
 	switch t {
 	case TileEmpty:
