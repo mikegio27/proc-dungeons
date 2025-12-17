@@ -24,11 +24,11 @@ func (g Grid) InBounds(c Cell) bool {
 	return c.X >= g.MinX && c.X <= g.MaxX && c.Y >= g.MinY && c.Y <= g.MaxY
 }
 
-func (g Grid) RoomInBoundsWithPadding(r Room, pad int32) bool {
-	return r.TopLeft.X >= g.MinX+pad &&
-		r.BottomRight.X <= g.MaxX-pad &&
-		r.TopLeft.Y >= g.MinY+pad &&
-		r.BottomRight.Y <= g.MaxY-pad
+func (g Grid) RoomInBoundsWithPadding(c Cell, pad int32) bool {
+	return c.X >= g.MinX+pad &&
+		c.X <= g.MaxX-pad &&
+		c.Y >= g.MinY+pad &&
+		c.Y <= g.MaxY-pad
 }
 
 func (g Grid) OnGridBoundary(c Cell) bool {

@@ -31,11 +31,11 @@ func (t Tile) String() string {
 func (t Tile) Rune() rune {
 	switch t {
 	case TileEmpty:
-		return ' '
+		return '_'
 	case TileRoomFloor:
 		return '.'
 	case TileCorridor:
-		return '#'
+		return ' '
 	case TileDoor:
 		return '+'
 	case TileWall:

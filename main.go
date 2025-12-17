@@ -21,7 +21,7 @@ func main() {
 	g := generator.New(generator.Config{
 		Grid:         model.Grid{MaxX: gridX, MaxY: gridY, MinX: -gridX, MinY: -gridY},
 		MaxRooms:     maxRooms,
-		CorridorW:    1,
+		CorridorW:    2,
 		CorridorBuff: 1,
 		RoomShapes: []model.RoomId{
 			model.Rectangle,
