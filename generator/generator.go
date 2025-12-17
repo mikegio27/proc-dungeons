@@ -36,7 +36,7 @@ func New(cfg Config, seed int64) *Generator {
 
 func (g *Generator) Generate() model.Dungeon {
 	d := model.NewDungeon(g.cfg.Grid)
-	rooms := g.Rooms(g.cfg.MaxRooms)
+	rooms := g.Rooms(d.Starts, g.cfg.MaxRooms)
 	d.Rooms = rooms
 	starts := g.GenPaths(&d, rooms)
 	d.Starts = starts

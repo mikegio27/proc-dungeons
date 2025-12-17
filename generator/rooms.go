@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/mikegio27/proc-dungeons/model"
@@ -8,11 +9,11 @@ import (
 
 // maxRoomAreaFraction controls the maximum fraction of the total grid area
 // that any single room's bounding box is allowed to occupy.
-const maxRoomAreaFraction = 0.15
+const maxRoomAreaFraction = 0.05
 
 // maxTotalRoomAreaFraction controls the maximum fraction of the grid area
 // that all rooms combined are allowed to occupy.
-const maxTotalRoomAreaFraction = 0.45
+const maxTotalRoomAreaFraction = 0.75
 
 // minRoomGap is the minimum number of tiles that should separate the
 // bounding boxes of any two rooms. This helps prevent rooms from being
@@ -25,19 +26,10 @@ const minRoomGap = 4
 // basic proportions of each shape.
 func (g *Generator) roomDimensions(shape model.RoomId) (width, height int32) {
 	plane := g.cfg.Grid
-	gridWidth := plane.MaxX - plane.MinX + 1
-	gridHeight := plane.MaxY - plane.MinY + 1
-	if gridWidth < 3 {
-		gridWidth = 3
-	}
-	if gridHeight < 3 {
-		gridHeight = 3
-	}
+	gridWidth := plane.MaxX - plane.MinX
+	gridHeight := plane.MaxY - plane.MinY
 	gridArea := gridWidth * gridHeight
-	maxArea := int32(maxRoomAreaFraction * float64(gridArea))
-	if maxArea < 9 { // ensure at least a small 3x3 room is possible
-		maxArea = 9
-	}
+	maxArea := max(int32(maxRoomAreaFraction*float64(gridArea)), 9)
 
 	minSize := int32(3)
 
@@ -85,8 +77,8 @@ func (g *Generator) roomEdges(shape model.RoomId) (topLeft, bottomRight model.Ce
 	width, height := g.roomDimensions(shape)
 
 	// Ensure the room fits in the grid; if not, clamp to grid size.
-	gridWidth := plane.MaxX - plane.MinX + 1
-	gridHeight := plane.MaxY - plane.MinY + 1
+	gridWidth := plane.MaxX - plane.MinX
+	gridHeight := plane.MaxY - plane.MinY
 	if width > gridWidth {
 		width = gridWidth
 	}
@@ -151,13 +143,28 @@ func roomsTooClose(a, b model.Room, gap int32) bool {
 	return true
 }
 
+func tooCloseToStart(r model.Room, starts []model.Cell, gap int32) bool {
+	ax1, ax2 := r.TopLeft.X, r.BottomRight.X
+	ay1, ay2 := r.TopLeft.Y, r.BottomRight.Y
+
+	for _, s := range starts {
+		sx, sy := s.X, s.Y
+		if ax1 > sx+gap || sx > ax2+gap || ay1 > sy+gap || sy > ay2+gap {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
 // Rooms generates up to maxRooms rooms, enforcing both a minimum spacing
 // between rooms and a cap on the total area that all rooms may occupy.
-func (g *Generator) Rooms(maxRooms int) []model.Room {
+func (g *Generator) Rooms(starts []model.Cell, maxRooms int) []model.Room {
 	plane := g.cfg.Grid
-	gridWidth := plane.MaxX - plane.MinX + 1
-	gridHeight := plane.MaxY - plane.MinY + 1
+	gridWidth := plane.MaxX - plane.MinX
+	gridHeight := plane.MaxY - plane.MinY
 	gridArea := gridWidth * gridHeight
+	fmt.Println(gridArea, gridHeight, gridWidth, plane)
 	maxTotalArea := int32(maxTotalRoomAreaFraction * float64(gridArea))
 	if maxTotalArea <= 0 {
 		maxTotalArea = gridArea
@@ -169,7 +176,7 @@ func (g *Generator) Rooms(maxRooms int) []model.Room {
 	for len(rooms) < maxRooms {
 		success := false
 		// Try several times to place a room that satisfies constraints.
-		for range 20 {
+		for range 200 {
 			candidate := g.RandomRoom()
 			area := roomArea(candidate)
 			if area == 0 || usedArea+area > maxTotalArea {
@@ -178,6 +185,10 @@ func (g *Generator) Rooms(maxRooms int) []model.Room {
 
 			tooClose := false
 			for _, existing := range rooms {
+				if tooCloseToStart(candidate, starts, minRoomGap) {
+					tooClose = true
+					break
+				}
 				if roomsTooClose(existing, candidate, minRoomGap) {
 					tooClose = true
 					break
@@ -315,7 +326,7 @@ func DrawWallsAroundRoom(d *model.Dungeon, room model.Room, forEachRoomCell func
 
 		for _, di := range dirs {
 			w := model.Cell{X: c.X + di.X, Y: c.Y + di.Y}
-			if d.At(w) == model.TileEmpty {
+			if d.At(w) == model.TileEmpty && !d.Grid.OnYBoundary(w) {
 				d.Set(w, model.TileWall)
 			}
 		}
