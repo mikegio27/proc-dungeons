@@ -6,8 +6,8 @@ import (
 	"github.com/mikegio27/proc-dungeons/model"
 )
 
+// DrawDungeon prints a simple ASCII representation of the dungeon to standard output with walls around the rendered grid.
 func DrawDungeon(d *model.Dungeon) {
-	DrawWalls(d)
 
 	g := d.Grid
 
@@ -51,30 +51,4 @@ func adjacentToStart(c model.Cell, starts map[model.Cell]bool) bool {
 		}
 	}
 	return false
-}
-
-func DrawWalls(d *model.Dungeon) {
-	dirs := []model.Cell{
-		{X: 1, Y: 0}, {X: -1, Y: 0},
-		{X: 0, Y: 1}, {X: 0, Y: -1},
-	}
-
-	for y := d.Grid.MinY; y <= d.Grid.MaxY; y++ {
-		for x := d.Grid.MinX; x <= d.Grid.MaxX; x++ {
-			c := model.Cell{X: x, Y: y}
-			if d.At(c) != model.TileEmpty {
-				continue
-			}
-
-			for _, di := range dirs {
-				n := model.Cell{X: c.X + di.X, Y: c.Y + di.Y}
-				switch d.At(n) {
-				case model.TileRoomFloor, model.TileDoor:
-					d.Set(c, model.TileWall)
-					goto next
-				}
-			}
-		next:
-		}
-	}
 }

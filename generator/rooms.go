@@ -17,7 +17,7 @@ const maxTotalRoomAreaFraction = 0.45
 // minRoomGap is the minimum number of tiles that should separate the
 // bounding boxes of any two rooms. This helps prevent rooms from being
 // squished directly against each other.
-const minRoomGap = 2
+const minRoomGap = 4
 
 // roomDimensions returns random width and height for the bounding box of a
 // given room shape. Dimensions are constrained so that the room stays
@@ -281,7 +281,9 @@ func (g *Generator) AddRoomEdges(d *model.Dungeon, rooms []model.Room) {
 				d.Set(c, model.TileRoomFloor)
 			}
 		})
+		DrawWallsAroundRoom(d, room, g.ForEachRoomCell)
 	}
+
 }
 
 func (g *Generator) ForEachRoomCell(room model.Room, fn func(model.Cell)) {
@@ -295,4 +297,27 @@ func (g *Generator) ForEachRoomCell(room model.Room, fn func(model.Cell)) {
 	default:
 		g.eachRect(room, fn)
 	}
+}
+
+func DrawWallsAroundRoom(d *model.Dungeon, room model.Room, forEachRoomCell func(model.Room, func(model.Cell))) {
+	dirs := []model.Cell{
+		{X: 1, Y: 0}, {X: -1, Y: 0},
+		{X: 0, Y: 1}, {X: 0, Y: -1},
+	}
+
+	forEachRoomCell(room, func(c model.Cell) {
+		switch d.At(c) {
+		case model.TileRoomFloor:
+			// ok
+		default:
+			return
+		}
+
+		for _, di := range dirs {
+			w := model.Cell{X: c.X + di.X, Y: c.Y + di.Y}
+			if d.At(w) == model.TileEmpty {
+				d.Set(w, model.TileWall)
+			}
+		}
+	})
 }
